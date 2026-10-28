@@ -1,0 +1,50 @@
+name: sync-upstream
+
+# Keeps this fork at "upstream + one commit" (this workflow file).
+# Uses only the fork's own GITHUB_TOKEN - no PAT, no deploy key, nothing stored.
+# Rebase + force-with-lease instead of merge, so history stays linear and the
+# fork never drifts into a pile of merge commits.
+
+on:
+  schedule:
+    - cron: "23 20 * * *"   # 04:23 Asia/Shanghai
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: sync-upstream
+  cancel-in-progress: false
+
+env:
+  UPSTREAM: hooke007/mpv_PlayKit
+  BRANCH: main
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Rebase onto upstream
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git remote add upstream "https://github.com/${UPSTREAM}.git"
+          git fetch upstream --prune
+          echo "fork     : $(git rev-parse HEAD)"
+          echo "upstream : $(git rev-parse upstream/${BRANCH})"
+          if git merge-base --is-ancestor "upstream/${BRANCH}" HEAD; then
+            echo "already up to date with upstream"
+          else
+            git rebase "upstream/${BRANCH}"
+            git push --force-with-lease origin "HEAD:${BRANCH}"
+            echo "synced: $(git rev-parse HEAD)"
+          fi
+          echo "--- delta vs upstream (should be only this workflow) ---"
+          git diff --stat "upstream/${BRANCH}" HEAD
