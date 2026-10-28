@@ -47,8 +47,11 @@ LICENSE:
 vec4 hook() {
     vec2 base = PREKERNEL_pos;
 
-    float low  = ceil((base[axis] * PREKERNEL_size[axis]) - taps - 0.5);
-    float high = floor((base[axis] * PREKERNEL_size[axis]) + taps - 0.5);
+    // POSTKERNEL (low-res target)
+    float ratio = PREKERNEL_size[axis] / HOOKED_size[axis];
+
+    float low  = ceil((base[axis] * PREKERNEL_size[axis]) - taps * ratio - 0.5);
+    float high = floor((base[axis] * PREKERNEL_size[axis]) + taps * ratio - 0.5);
 
     float W = 0.0;
     vec4 avg = vec4(0);
@@ -56,7 +59,7 @@ vec4 hook() {
 
     for (float k = low; k <= high; k++) {
         pos[axis] = PREKERNEL_pt[axis] * (k + 0.5);
-        float rel = (pos[axis] - base[axis]) * PREKERNEL_size[axis];
+        float rel = (pos[axis] - base[axis]) * HOOKED_size[axis];
         float w = Kernel(rel);
 
         vec4 tex = textureLod(PREKERNEL_raw, pos, 0.0) * PREKERNEL_mul;
@@ -84,8 +87,11 @@ vec4 hook() {
 
 vec4 hook() {
     vec2 base = L2_pos;
-    float low  = ceil((base[axis] * L2_size[axis]) - taps - 0.5);
-    float high = floor((base[axis] * L2_size[axis]) + taps - 0.5);
+
+    float ratio = L2_size[axis] / HOOKED_size[axis];
+
+    float low  = ceil((base[axis] * L2_size[axis]) - taps * ratio - 0.5);
+    float high = floor((base[axis] * L2_size[axis]) + taps * ratio - 0.5);
 
     float W = 0.0;
     vec4 avg = vec4(0);
@@ -93,7 +99,7 @@ vec4 hook() {
 
     for (float k = low; k <= high; k++) {
         pos[axis] = L2_pt[axis] * (k + 0.5);
-        float rel = (pos[axis] - base[axis]) * L2_size[axis];
+        float rel = (pos[axis] - base[axis]) * HOOKED_size[axis];
         float w = Kernel(rel);
 
         avg += w * textureLod(L2_raw, pos, 0.0) * L2_mul;
@@ -233,9 +239,9 @@ vec4 hook() {
     }
     avg /= W;
     vec4 L = POSTKERNEL_texOff(0);
-    vec3 M = avg[1];
-    float R = avg[2].r;
-    vec3 final_rgb = M + R * (L.rgb - M);
+    // blur(M) + blur(R)*L - blur(R*M).
+    // avg[0]=blur(R*M), avg[1]=blur(M), avg[2]=blur(R).
+    vec3 final_rgb = avg[1] + avg[2] * L.rgb - avg[0];
     return vec4(final_rgb, L.a);
 
 #endif
